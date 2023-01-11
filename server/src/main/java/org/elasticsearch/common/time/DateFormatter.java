@@ -22,6 +22,8 @@ import java.util.Locale;
 
 public interface DateFormatter {
 
+    String PATTERN_DELIMITER = "||";
+
     /**
      * Try to parse input to a java time TemporalAccessor
      * @param input                   An arbitrary string resembling the string representation of a date or time
@@ -113,6 +115,11 @@ public interface DateFormatter {
             input = input.substring(1);
         }
 
+        if (input.contains(PATTERN_DELIMITER) == false) {
+            var pattern = (supportedVersion.before(Version.V_8_0_0)) ? LegacyFormatNames.camelCaseToSnakeCase(input) : input;
+            return DateFormatters.forPattern(pattern);
+        }
+
         // forPattern can be hot (e.g. executing a date processor on each document in a 1000 document bulk index request),
         // so this is a for each loop instead of the equivalent stream pipeline
         String[] patterns = splitCombinedPatterns(input);
@@ -133,7 +140,7 @@ public interface DateFormatter {
     }
 
     static String[] splitCombinedPatterns(String input) {
-        String[] patterns = Strings.delimitedListToStringArray(input, "||");
+        String[] patterns = Strings.delimitedListToStringArray(input, PATTERN_DELIMITER);
         for (String pattern : patterns) {
             if (Strings.hasLength(pattern) == false) {
                 throw new IllegalArgumentException("Cannot have empty element in multi date format pattern: " + input);
