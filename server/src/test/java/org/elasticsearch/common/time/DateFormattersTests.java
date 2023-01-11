@@ -9,6 +9,7 @@
 package org.elasticsearch.common.time;
 
 import org.elasticsearch.ElasticsearchParseException;
+import org.elasticsearch.Version;
 import org.elasticsearch.common.util.LocaleUtils;
 import org.elasticsearch.index.mapper.DateFieldMapper;
 import org.elasticsearch.test.ESTestCase;
@@ -43,7 +44,11 @@ public class DateFormattersTests extends ESTestCase {
     }
 
     private void assertParses(String input, String format) {
-        DateFormatter javaFormatter = DateFormatter.forPattern(format);
+        assertParses(input, format, Version.V_8_0_0);
+    }
+
+    private void assertParses(String input, String format, Version version) {
+        DateFormatter javaFormatter = DateFormatter.forPattern(format, version);
         assertParses(input, javaFormatter);
     }
 
@@ -680,6 +685,11 @@ public class DateFormattersTests extends ESTestCase {
         assertParses("1234", "strict_date_optional_time||epoch_millis");
         // this one is considered a 12345milliseconds since epoch
         assertParses("12345", "strict_date_optional_time||epoch_millis");
+    }
+
+    public void testCamelCase() {
+        assertParses("1234", "strictDateOptionalTime", Version.V_7_0_0);
+        assertParses("1234", "strictDateOptionalTime||dateTime", Version.V_7_0_0);
     }
 
     public void testTimezoneParsing() {
