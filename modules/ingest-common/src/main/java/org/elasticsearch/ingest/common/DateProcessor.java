@@ -11,6 +11,7 @@ package org.elasticsearch.ingest.common;
 import org.elasticsearch.ExceptionsHelper;
 import org.elasticsearch.common.time.DateFormatter;
 import org.elasticsearch.common.util.LocaleUtils;
+import org.elasticsearch.common.util.concurrent.ConcurrentCollections;
 import org.elasticsearch.core.Nullable;
 import org.elasticsearch.ingest.AbstractProcessor;
 import org.elasticsearch.ingest.ConfigurationUtils;
@@ -26,7 +27,9 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.concurrent.ConcurrentMap;
 import java.util.function.Function;
+import java.util.function.Supplier;
 
 public final class DateProcessor extends AbstractProcessor {
 
@@ -42,6 +45,7 @@ public final class DateProcessor extends AbstractProcessor {
     private final List<String> formats;
     private final List<Function<Map<String, Object>, Function<String, ZonedDateTime>>> dateParsers;
     private final String outputFormat;
+    private final Cache cache;
 
     DateProcessor(
         String tag,
@@ -72,9 +76,16 @@ public final class DateProcessor extends AbstractProcessor {
         this.targetField = targetField;
         this.formats = formats;
         this.dateParsers = new ArrayList<>(this.formats.size());
+        this.cache = new Cache();
+
         for (String format : formats) {
             DateFormat dateFormat = DateFormat.fromString(format);
-            dateParsers.add((params) -> dateFormat.getFunction(format, newDateTimeZone(params), newLocale(params)));
+            dateParsers.add((params) -> {
+                var documentZoneId = newDateTimeZone(params);
+                var documentLocale = newLocale(params);
+                var key = new Cache.Key(format, documentZoneId, documentLocale);
+                return cache.getOrCompute(key, () -> dateFormat.getFunction(format, documentZoneId, documentLocale));
+            });
         }
         this.outputFormat = outputFormat;
         formatter = DateFormatter.forPattern(this.outputFormat);
@@ -197,5 +208,30 @@ public final class DateProcessor extends AbstractProcessor {
                 outputFormat
             );
         }
+    }
+
+    private static final class Cache {
+
+        private static final int MAX_SIZE = 16;
+
+        private final ConcurrentMap<Key, Function<String, ZonedDateTime>> map = ConcurrentCollections
+            .newConcurrentMapWithAggressiveConcurrency(MAX_SIZE);
+
+        Function<String, ZonedDateTime> getOrCompute(Key key, Supplier<Function<String, ZonedDateTime>> supplier) {
+            var element = map.get(key);
+
+            if (element != null) {
+                return element;
+            }
+
+            element = supplier.get();
+            if (map.size() >= MAX_SIZE) {
+                map.clear();
+            }
+            map.put(key, element);
+            return element;
+        }
+
+        record Key(String format, ZoneId zoneId, Locale locale) {}
     }
 }
