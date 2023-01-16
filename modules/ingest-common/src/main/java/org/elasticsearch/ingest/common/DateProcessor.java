@@ -8,6 +8,8 @@
 
 package org.elasticsearch.ingest.common;
 
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.elasticsearch.ExceptionsHelper;
 import org.elasticsearch.common.time.DateFormatter;
 import org.elasticsearch.common.util.LocaleUtils;
@@ -28,6 +30,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Function;
 import java.util.function.Supplier;
 
@@ -84,7 +87,7 @@ public final class DateProcessor extends AbstractProcessor {
                 var documentZoneId = newDateTimeZone(params);
                 var documentLocale = newLocale(params);
                 var key = new Cache.Key(format, documentZoneId, documentLocale);
-                return cache.getOrCompute(key, () -> dateFormat.getFunction(format, documentZoneId, documentLocale));
+                return cache.getOrCompute(tag, key, () -> dateFormat.getFunction(format, documentZoneId, documentLocale));
             });
         }
         this.outputFormat = outputFormat;
@@ -212,20 +215,26 @@ public final class DateProcessor extends AbstractProcessor {
 
     private static final class Cache {
 
+        private static final Logger logger = LogManager.getLogger(Cache.class);
         private static final int MAX_SIZE = 16;
+        private final AtomicLong counter = new AtomicLong(0);
 
         private final ConcurrentMap<Key, Function<String, ZonedDateTime>> map = ConcurrentCollections
             .newConcurrentMapWithAggressiveConcurrency(MAX_SIZE);
 
-        Function<String, ZonedDateTime> getOrCompute(Key key, Supplier<Function<String, ZonedDateTime>> supplier) {
+        Function<String, ZonedDateTime> getOrCompute(String tag, Key key, Supplier<Function<String, ZonedDateTime>> supplier) {
             var element = map.get(key);
-
+            counter.incrementAndGet();
+            if (counter.compareAndSet(100, 0)) {
+                logger.info("[{}] Cache size: {}", tag, map.size());
+            }
             if (element != null) {
                 return element;
             }
 
             element = supplier.get();
             if (map.size() >= MAX_SIZE) {
+                logger.info("[{}] Purging the cache {}", tag, key);
                 map.clear();
             }
             map.put(key, element);
