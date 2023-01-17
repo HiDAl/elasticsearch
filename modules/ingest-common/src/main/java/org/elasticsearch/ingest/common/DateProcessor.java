@@ -22,6 +22,7 @@ import org.elasticsearch.ingest.Processor;
 import org.elasticsearch.script.ScriptService;
 import org.elasticsearch.script.TemplateScript;
 
+import java.lang.ref.SoftReference;
 import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.time.ZonedDateTime;
@@ -48,7 +49,7 @@ public final class DateProcessor extends AbstractProcessor {
     private final List<String> formats;
     private final List<Function<Map<String, Object>, Function<String, ZonedDateTime>>> dateParsers;
     private final String outputFormat;
-    private final Cache cache;
+    private static final Cache cache = new Cache();
 
     DateProcessor(
         String tag,
@@ -79,7 +80,7 @@ public final class DateProcessor extends AbstractProcessor {
         this.targetField = targetField;
         this.formats = formats;
         this.dateParsers = new ArrayList<>(this.formats.size());
-        this.cache = new Cache();
+//        this.cache = new Cache();
 
         for (String format : formats) {
             DateFormat dateFormat = DateFormat.fromString(format);
@@ -216,10 +217,10 @@ public final class DateProcessor extends AbstractProcessor {
     private static final class Cache {
 
         private static final Logger logger = LogManager.getLogger(Cache.class);
-        private static final int MAX_SIZE = 16;
+        private static final int MAX_SIZE = 512;
         private final AtomicLong counter = new AtomicLong(0);
 
-        private final ConcurrentMap<Key, Function<String, ZonedDateTime>> map = ConcurrentCollections
+        private final ConcurrentMap<Key, SoftReference<Function<String, ZonedDateTime>>> map = ConcurrentCollections
             .newConcurrentMapWithAggressiveConcurrency(MAX_SIZE);
 
         Function<String, ZonedDateTime> getOrCompute(String tag, Key key, Supplier<Function<String, ZonedDateTime>> supplier) {
@@ -229,16 +230,16 @@ public final class DateProcessor extends AbstractProcessor {
                 logger.info("[{}] Cache size: {}", tag, map.size());
             }
             if (element != null) {
-                return element;
+                return element.get();
             }
 
-            element = supplier.get();
+            element = new SoftReference<>(supplier.get());
             if (map.size() >= MAX_SIZE) {
                 logger.info("[{}] Purging the cache {}", tag, key);
                 map.clear();
             }
             map.put(key, element);
-            return element;
+            return element.get();
         }
 
         record Key(String format, ZoneId zoneId, Locale locale) {}
