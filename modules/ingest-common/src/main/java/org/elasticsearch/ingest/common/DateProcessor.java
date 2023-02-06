@@ -123,7 +123,8 @@ public final class DateProcessor extends AbstractProcessor {
         }
 
         if (dateTime == null) {
-            throw new IllegalArgumentException("unable to parse date [" + value + "]", lastException);
+//            throw new IllegalArgumentException("unable to parse date [" + value + "]", lastException);
+            throw new StacktraceLessException("unable to parse date [" + value + "]", lastException);
         }
 
         ingestDocument.setFieldValue(targetField, formatter.format(dateTime));
