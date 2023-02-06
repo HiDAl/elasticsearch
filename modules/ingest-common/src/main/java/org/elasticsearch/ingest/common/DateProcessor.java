@@ -77,20 +77,35 @@ public final class DateProcessor extends AbstractProcessor {
         this.targetField = targetField;
         this.formats = formats;
         this.dateParsers = new ArrayList<>(this.formats.size());
+        var javaFormats = new ArrayList<String>(this.formats.size());
 
         for (String format : formats) {
             DateFormat dateFormat = DateFormat.fromString(format);
-            dateParsers.add((params) -> {
-                var documentZoneId = newDateTimeZone(params);
-                var documentLocale = newLocale(params);
-                return Cache.INSTANCE.getOrCompute(
-                    new Cache.Key(format, documentZoneId, documentLocale),
-                    () -> dateFormat.getFunction(format, documentZoneId, documentLocale)
-                );
-            });
+            if (dateFormat == DateFormat.Java) {
+                javaFormats.add(format);
+            } else {
+                dateParsers.add(buildDateParser(format, dateFormat));
+            }
         }
+
+        if (javaFormats.isEmpty() == false) {
+            var format = String.join("||", javaFormats);
+            dateParsers.add(buildDateParser(format, DateFormat.Java));
+        }
+
         this.outputFormat = outputFormat;
         formatter = DateFormatter.forPattern(this.outputFormat);
+    }
+
+    private Function<Map<String, Object>, Function<String, ZonedDateTime>> buildDateParser(String format, DateFormat dateFormat) {
+        return (params) -> {
+            var documentZoneId = newDateTimeZone(params);
+            var documentLocale = newLocale(params);
+            return Cache.INSTANCE.getOrCompute(
+                new Cache.Key(format, documentZoneId, documentLocale),
+                () -> dateFormat.getFunction(format, documentZoneId, documentLocale)
+            );
+        };
     }
 
     private ZoneId newDateTimeZone(Map<String, Object> params) {
