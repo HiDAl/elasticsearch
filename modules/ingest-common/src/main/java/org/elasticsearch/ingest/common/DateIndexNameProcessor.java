@@ -26,7 +26,6 @@ import java.util.IllformedLocaleException;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.function.Function;
 
 public final class DateIndexNameProcessor extends AbstractProcessor {
 
@@ -37,13 +36,13 @@ public final class DateIndexNameProcessor extends AbstractProcessor {
     private final TemplateScript.Factory dateRoundingTemplate;
     private final TemplateScript.Factory indexNameFormatTemplate;
     private final ZoneId timezone;
-    private final List<Function<String, ZonedDateTime>> dateFormats;
+    private final List<DateFormat.Parser> dateFormats;
 
     DateIndexNameProcessor(
         String tag,
         String description,
         String field,
-        List<Function<String, ZonedDateTime>> dateFormats,
+        List<DateFormat.Parser> dateFormats,
         ZoneId timezone,
         TemplateScript.Factory indexNamePrefixTemplate,
         TemplateScript.Factory dateRoundingTemplate,
@@ -70,9 +69,9 @@ public final class DateIndexNameProcessor extends AbstractProcessor {
 
         ZonedDateTime dateTime = null;
         Exception lastException = null;
-        for (Function<String, ZonedDateTime> dateParser : dateFormats) {
+        for (DateFormat.Parser dateParser : dateFormats) {
             try {
-                dateTime = dateParser.apply(date);
+                dateTime = dateParser.parse(date).get();
             } catch (Exception e) {
                 // try the next parser and keep track of the exceptions
                 lastException = ExceptionsHelper.useOrSuppress(lastException, e);
@@ -132,7 +131,7 @@ public final class DateIndexNameProcessor extends AbstractProcessor {
         return timezone;
     }
 
-    List<Function<String, ZonedDateTime>> getDateFormats() {
+    List<DateFormat.Parser> getDateFormats() {
         return dateFormats;
     }
 
@@ -166,10 +165,10 @@ public final class DateIndexNameProcessor extends AbstractProcessor {
             if (dateFormatStrings == null) {
                 dateFormatStrings = Collections.singletonList("yyyy-MM-dd'T'HH:mm:ss.SSSXX");
             }
-            List<Function<String, ZonedDateTime>> dateFormats = new ArrayList<>(dateFormatStrings.size());
+            List<DateFormat.Parser> dateFormats = new ArrayList<>(dateFormatStrings.size());
             for (String format : dateFormatStrings) {
                 DateFormat dateFormat = DateFormat.fromString(format);
-                dateFormats.add(dateFormat.getFunction(format, timezone, locale));
+                dateFormats.add(dateFormat.getParser(format, timezone, locale));
             }
 
             String field = ConfigurationUtils.readStringProperty(TYPE, tag, config, "field");

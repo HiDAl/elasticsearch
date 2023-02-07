@@ -9,6 +9,7 @@
 package org.elasticsearch.common.time;
 
 import org.elasticsearch.Version;
+import org.elasticsearch.common.Result;
 import org.elasticsearch.common.Strings;
 
 import java.time.Instant;
@@ -30,6 +31,8 @@ public interface DateFormatter {
      * @return                        The java time object containing the parsed input
      */
     TemporalAccessor parse(String input);
+
+    Result<TemporalAccessor, String> safeParse(String input);
 
     /**
      * Parse the given input into millis-since-epoch.

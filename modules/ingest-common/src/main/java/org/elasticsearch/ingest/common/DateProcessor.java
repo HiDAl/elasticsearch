@@ -8,7 +8,6 @@
 
 package org.elasticsearch.ingest.common;
 
-import org.elasticsearch.ExceptionsHelper;
 import org.elasticsearch.common.settings.SettingsException;
 import org.elasticsearch.common.time.DateFormatter;
 import org.elasticsearch.common.util.LocaleUtils;
@@ -45,7 +44,7 @@ public final class DateProcessor extends AbstractProcessor {
     private final String field;
     private final String targetField;
     private final List<String> formats;
-    private final List<Function<Map<String, Object>, Function<String, ZonedDateTime>>> dateParsers;
+    private final List<Function<Map<String, Object>, DateFormat.Parser>> dateParsers;
     private final String outputFormat;
 
     DateProcessor(
@@ -85,7 +84,7 @@ public final class DateProcessor extends AbstractProcessor {
                 var documentLocale = newLocale(params);
                 return Cache.INSTANCE.getOrCompute(
                     new Cache.Key(format, documentZoneId, documentLocale),
-                    () -> dateFormat.getFunction(format, documentZoneId, documentLocale)
+                    () -> dateFormat.getParser(format, documentZoneId, documentLocale)
                 );
             });
         }
@@ -112,18 +111,28 @@ public final class DateProcessor extends AbstractProcessor {
 
         ZonedDateTime dateTime = null;
         Exception lastException = null;
-        for (Function<Map<String, Object>, Function<String, ZonedDateTime>> dateParser : dateParsers) {
-            try {
-                dateTime = dateParser.apply(ingestDocument.getSourceAndMetadata()).apply(value);
+        var errors = new ArrayList<String>();
+        for (Function<Map<String, Object>, DateFormat.Parser> dateParser : dateParsers) {
+            var result = dateParser.apply(ingestDocument.getSourceAndMetadata()).parse(value);
+
+            if (result.isSuccess()) {
+                dateTime = result.get();
                 break;
-            } catch (Exception e) {
-                // try the next parser and keep track of the exceptions
-                lastException = ExceptionsHelper.useOrSuppress(lastException, e);
+            } else {
+                errors.add(result.getError());
             }
+//            try {
+//                dateTime = dateParser.apply(ingestDocument.getSourceAndMetadata()).apply(value).get();
+//                break;
+//            } catch (Exception e) {
+//                // try the next parser and keep track of the exceptions
+//                lastException = ExceptionsHelper.useOrSuppress(lastException, e);
+//            }
         }
 
         if (dateTime == null) {
-            throw new IllegalArgumentException("unable to parse date [" + value + "]", lastException);
+            throw new IllegalArgumentException("unable to parse date [" + value + "]: " + String.join("\n", errors));
+//            throw new IllegalArgumentException("unable to parse date [" + value + "]", lastException);
         }
 
         ingestDocument.setFieldValue(targetField, formatter.format(dateTime));
@@ -229,7 +238,7 @@ public final class DateProcessor extends AbstractProcessor {
                 throw new SettingsException("{} must be a valid number but was [{}]", CACHE_CAPACITY_SETTING, cacheSizeStr);
             }
         }
-        private final ConcurrentMap<Key, SoftReference<Function<String, ZonedDateTime>>> map;
+        private final ConcurrentMap<Key, SoftReference<DateFormat.Parser>> map;
         private final int capacity;
 
         Cache(int capacity) {
@@ -240,8 +249,8 @@ public final class DateProcessor extends AbstractProcessor {
             this.map = ConcurrentCollections.newConcurrentMapWithAggressiveConcurrency(this.capacity);
         }
 
-        Function<String, ZonedDateTime> getOrCompute(Key key, Supplier<Function<String, ZonedDateTime>> supplier) {
-            Function<String, ZonedDateTime> fn;
+        DateFormat.Parser getOrCompute(Key key, Supplier<DateFormat.Parser> supplier) {
+            DateFormat.Parser fn;
             var element = map.get(key);
             // element exist and wasn't GCed
             if (element != null && (fn = element.get()) != null) {

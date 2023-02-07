@@ -25,7 +25,7 @@ import static org.hamcrest.Matchers.equalTo;
 public class DateIndexNameProcessorTests extends ESTestCase {
 
     public void testJavaPattern() throws Exception {
-        Function<String, ZonedDateTime> function = DateFormat.Java.getFunction("yyyy-MM-dd'T'HH:mm:ss.SSSXX", ZoneOffset.UTC, Locale.ROOT);
+        Function<String, ZonedDateTime> function = DateFormat.Java.getParser("yyyy-MM-dd'T'HH:mm:ss.SSSXX", ZoneOffset.UTC, Locale.ROOT);
         DateIndexNameProcessor processor = createProcessor("_field", List.of(function), ZoneOffset.UTC, "events-", "y", "yyyyMMdd");
         IngestDocument document = new IngestDocument("_index", "_id", 1, null, null, Map.of("_field", "2016-04-25T12:24:20.101Z"));
         processor.execute(document);
@@ -33,7 +33,7 @@ public class DateIndexNameProcessorTests extends ESTestCase {
     }
 
     public void testTAI64N() throws Exception {
-        Function<String, ZonedDateTime> function = DateFormat.Tai64n.getFunction(null, ZoneOffset.UTC, null);
+        Function<String, ZonedDateTime> function = DateFormat.Tai64n.getParser(null, ZoneOffset.UTC, null);
         DateIndexNameProcessor dateProcessor = createProcessor("_field", List.of(function), ZoneOffset.UTC, "events-", "m", "yyyyMMdd");
         IngestDocument document = new IngestDocument(
             "_index",
@@ -48,7 +48,7 @@ public class DateIndexNameProcessorTests extends ESTestCase {
     }
 
     public void testUnixMs() throws Exception {
-        Function<String, ZonedDateTime> function = DateFormat.UnixMs.getFunction(null, ZoneOffset.UTC, null);
+        Function<String, ZonedDateTime> function = DateFormat.UnixMs.getParser(null, ZoneOffset.UTC, null);
         DateIndexNameProcessor dateProcessor = createProcessor("_field", List.of(function), ZoneOffset.UTC, "events-", "m", "yyyyMMdd");
         IngestDocument document = new IngestDocument("_index", "_id", 1, null, null, Map.of("_field", "1000500"));
         dateProcessor.execute(document);
@@ -60,7 +60,7 @@ public class DateIndexNameProcessorTests extends ESTestCase {
     }
 
     public void testUnix() throws Exception {
-        Function<String, ZonedDateTime> function = DateFormat.Unix.getFunction(null, ZoneOffset.UTC, null);
+        Function<String, ZonedDateTime> function = DateFormat.Unix.getParser(null, ZoneOffset.UTC, null);
         DateIndexNameProcessor dateProcessor = createProcessor("_field", List.of(function), ZoneOffset.UTC, "events-", "m", "yyyyMMdd");
         IngestDocument document = new IngestDocument("_index", "_id", 1, null, null, Map.of("_field", "1000.5"));
         dateProcessor.execute(document);
@@ -72,7 +72,7 @@ public class DateIndexNameProcessorTests extends ESTestCase {
         String dateRounding = randomFrom("y", "M", "w", "d", "h", "m", "s");
         String indexNameFormat = randomFrom("yyyy-MM-dd'T'HH:mm:ss.SSSZZ", "yyyyMMdd", "MM/dd/yyyy");
         String date = Integer.toString(randomInt());
-        Function<String, ZonedDateTime> dateTimeFunction = DateFormat.Unix.getFunction(null, ZoneOffset.UTC, null);
+        Function<String, ZonedDateTime> dateTimeFunction = DateFormat.Unix.getParser(null, ZoneOffset.UTC, null);
 
         DateIndexNameProcessor dateProcessor = createProcessor(
             "_field",

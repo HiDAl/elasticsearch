@@ -8,6 +8,7 @@
 
 package org.elasticsearch.common.time;
 
+import org.elasticsearch.common.Result;
 import org.elasticsearch.common.Strings;
 
 import java.text.ParsePosition;
@@ -209,6 +210,30 @@ class JavaDateFormatter implements DateFormatter {
             return doParse(input);
         } catch (Exception e) {
             throw new IllegalArgumentException("failed to parse date field [" + input + "] with format [" + format + "]", e);
+        }
+    }
+
+    @Override
+    public Result<TemporalAccessor, String> safeParse(String input) {
+        if (Strings.isNullOrEmpty(input)) {
+            return Result.error("cannot parse empty date");
+        }
+
+        try {
+            if (parsers.length > 1) {
+                for (DateTimeFormatter formatter : parsers) {
+                    ParsePosition pos = new ParsePosition(0);
+                    Object object = formatter.toFormat().parseObject(input, pos);
+                    if (parsingSucceeded(object, input, pos)) {
+                        return Result.success((TemporalAccessor) object);
+                    }
+                }
+                return Result.error("Failed to parse with all enclosed parsers");
+            } else {
+                return Result.success(this.parsers[0].parse(input));
+            }
+        } catch (Exception e) {
+            return Result.error("failed to parse date field [" + input + "] with format [" + format + "]");
         }
     }
 

@@ -8,6 +8,7 @@
 
 package org.elasticsearch.ingest.common;
 
+import org.elasticsearch.common.Result;
 import org.elasticsearch.common.time.DateFormatter;
 import org.elasticsearch.common.time.DateFormatters;
 
@@ -17,12 +18,10 @@ import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.time.ZonedDateTime;
 import java.time.temporal.ChronoField;
-import java.time.temporal.TemporalAccessor;
 import java.time.temporal.WeekFields;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
-import java.util.function.Function;
 
 import static java.time.temporal.ChronoField.DAY_OF_MONTH;
 import static java.time.temporal.ChronoField.HOUR_OF_DAY;
@@ -34,30 +33,30 @@ import static java.time.temporal.ChronoField.SECOND_OF_DAY;
 enum DateFormat {
     Iso8601 {
         @Override
-        Function<String, ZonedDateTime> getFunction(String format, ZoneId timezone, Locale locale) {
-            return (date) -> {
-                TemporalAccessor accessor = ISO_8601.parse(date);
+        Parser getParser(String format, ZoneId timezone, Locale locale) {
+            return date -> {
                 // even though locale could be set to en-us, Locale.ROOT (following iso8601 calendar data rules) should be used
-                return DateFormatters.from(accessor, Locale.ROOT, timezone).withZoneSameInstant(timezone);
+                return ISO_8601.safeParse(date)
+                    .map(accessor -> DateFormatters.from(accessor, Locale.ROOT, timezone).withZoneSameInstant(timezone));
             };
         }
     },
     Unix {
         @Override
-        Function<String, ZonedDateTime> getFunction(String format, ZoneId timezone, Locale locale) {
-            return date -> Instant.ofEpochMilli((long) (Double.parseDouble(date) * 1000.0)).atZone(timezone);
+        Parser getParser(String format, ZoneId timezone, Locale locale) {
+            return date -> Result.success(Instant.ofEpochMilli((long) (Double.parseDouble(date) * 1000.0)).atZone(timezone));
         }
     },
     UnixMs {
         @Override
-        Function<String, ZonedDateTime> getFunction(String format, ZoneId timezone, Locale locale) {
-            return date -> Instant.ofEpochMilli(Long.parseLong(date)).atZone(timezone);
+        Parser getParser(String format, ZoneId timezone, Locale locale) {
+            return date -> Result.success(Instant.ofEpochMilli(Long.parseLong(date)).atZone(timezone));
         }
     },
     Tai64n {
         @Override
-        Function<String, ZonedDateTime> getFunction(String format, ZoneId timezone, Locale locale) {
-            return date -> Instant.ofEpochMilli(parseMillis(date)).atZone(timezone);
+        Parser getParser(String format, ZoneId timezone, Locale locale) {
+            return date -> Result.success(Instant.ofEpochMilli(parseMillis(date)).atZone(timezone));
         }
 
         private static long parseMillis(String date) {
@@ -81,17 +80,15 @@ enum DateFormat {
         );
 
         @Override
-        Function<String, ZonedDateTime> getFunction(String format, ZoneId zoneId, Locale locale) {
+        Parser getParser(String format, ZoneId zoneId, Locale locale) {
             // support the 6.x BWC compatible way of parsing java 8 dates
             if (format.startsWith("8")) {
                 format = format.substring(1);
             }
 
-            DateFormatter dateFormatter = DateFormatter.forPattern(format).withLocale(locale);
+            DateFormatter formatter = DateFormatter.forPattern(format).withLocale(locale);
 
-            final DateFormatter formatter = dateFormatter;
-            return text -> {
-                TemporalAccessor accessor = formatter.parse(text);
+            return text -> formatter.safeParse(text).map(accessor -> {
                 // if there is no year nor year-of-era, we fall back to the current one and
                 // fill the rest of the date up with the parsed date
                 if (accessor.isSupported(ChronoField.YEAR) == false
@@ -109,8 +106,7 @@ enum DateFormat {
                 }
 
                 return DateFormatters.from(accessor, locale, zoneId).withZoneSameInstant(zoneId);
-
-            };
+            });
         }
     };
 
@@ -122,7 +118,7 @@ enum DateFormat {
      */
     private static final DateFormatter ISO_8601 = DateFormatter.forPattern("iso8601");
 
-    abstract Function<String, ZonedDateTime> getFunction(String format, ZoneId timezone, Locale locale);
+    abstract Parser getParser(String format, ZoneId timezone, Locale locale);
 
     static DateFormat fromString(String format) {
         return switch (format) {
@@ -132,5 +128,10 @@ enum DateFormat {
             case "TAI64N" -> Tai64n;
             default -> Java;
         };
+    }
+
+    @FunctionalInterface
+    interface Parser {
+        Result<ZonedDateTime, String> parse(String string);
     }
 }

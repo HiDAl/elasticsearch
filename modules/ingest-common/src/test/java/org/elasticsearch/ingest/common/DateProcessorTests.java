@@ -8,6 +8,7 @@
 
 package org.elasticsearch.ingest.common;
 
+import org.elasticsearch.common.Result;
 import org.elasticsearch.core.Strings;
 import org.elasticsearch.ingest.IngestDocument;
 import org.elasticsearch.ingest.RandomDocumentPicks;
@@ -24,7 +25,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.function.Function;
 import java.util.function.Supplier;
 
 import static org.hamcrest.Matchers.containsString;
@@ -344,10 +344,10 @@ public class DateProcessorTests extends ESTestCase {
 
     @SuppressWarnings("unchecked")
     public void testCacheIsEvictedAfterReachMaxCapacity() {
-        Supplier<Function<String, ZonedDateTime>> supplier1 = mock(Supplier.class);
-        Supplier<Function<String, ZonedDateTime>> supplier2 = mock(Supplier.class);
-        Function<String, ZonedDateTime> zonedDateTimeFunction1 = str -> ZonedDateTime.now();
-        Function<String, ZonedDateTime> zonedDateTimeFunction2 = str -> ZonedDateTime.now();
+        Supplier<DateFormat.Parser> supplier1 = mock(Supplier.class);
+        Supplier<DateFormat.Parser> supplier2 = mock(Supplier.class);
+        DateFormat.Parser zonedDateTimeFunction1 = str -> Result.success(ZonedDateTime.now());
+        DateFormat.Parser zonedDateTimeFunction2 = str -> Result.success(ZonedDateTime.now());
         var cache = new DateProcessor.Cache(1);
         var key1 = new DateProcessor.Cache.Key("format-1", ZoneId.systemDefault(), Locale.ROOT);
         var key2 = new DateProcessor.Cache.Key("format-2", ZoneId.systemDefault(), Locale.ROOT);
