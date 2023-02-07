@@ -15,6 +15,7 @@ import org.elasticsearch.grok.MatcherWatchdog;
 import org.elasticsearch.ingest.AbstractProcessor;
 import org.elasticsearch.ingest.ConfigurationUtils;
 import org.elasticsearch.ingest.IngestDocument;
+import org.elasticsearch.ingest.IngestIllegalArgumentException;
 import org.elasticsearch.ingest.Processor;
 
 import java.util.HashMap;
@@ -65,12 +66,12 @@ public final class GrokProcessor extends AbstractProcessor {
         if (fieldValue == null && ignoreMissing) {
             return ingestDocument;
         } else if (fieldValue == null) {
-            throw new IllegalArgumentException("field [" + matchField + "] is null, cannot process it.");
+            throw new IngestIllegalArgumentException("field [" + matchField + "] is null, cannot process it.");
         }
 
         Map<String, Object> matches = grok.captures(fieldValue);
         if (matches == null) {
-            throw new IllegalArgumentException("Provided Grok expressions do not match field value: [" + fieldValue + "]");
+            throw new IngestIllegalArgumentException("Provided Grok expressions do not match field value: [" + fieldValue + "]");
         }
 
         matches.forEach(ingestDocument::setFieldValue);

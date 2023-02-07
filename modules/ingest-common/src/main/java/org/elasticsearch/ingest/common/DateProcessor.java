@@ -17,6 +17,7 @@ import org.elasticsearch.core.Nullable;
 import org.elasticsearch.ingest.AbstractProcessor;
 import org.elasticsearch.ingest.ConfigurationUtils;
 import org.elasticsearch.ingest.IngestDocument;
+import org.elasticsearch.ingest.IngestIllegalArgumentException;
 import org.elasticsearch.ingest.Processor;
 import org.elasticsearch.script.ScriptService;
 import org.elasticsearch.script.TemplateScript;
@@ -123,7 +124,7 @@ public final class DateProcessor extends AbstractProcessor {
         }
 
         if (dateTime == null) {
-            throw new IllegalArgumentException("unable to parse date [" + value + "]", lastException);
+            throw new IngestIllegalArgumentException("unable to parse date [" + value + "]", lastException);
         }
 
         ingestDocument.setFieldValue(targetField, formatter.format(dateTime));
